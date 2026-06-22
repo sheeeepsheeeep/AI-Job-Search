@@ -23,6 +23,61 @@ from database.database import Base
 
 
 # ---------------------------------------------------------------------------
+# User & Session
+# ---------------------------------------------------------------------------
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = Column(String, unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = Column(String, nullable=False)
+    salt: Mapped[str] = Column(String, nullable=False)
+    created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
+
+    # Relationships
+    profiles: Mapped[List["CandidateProfile"]] = relationship(
+        "CandidateProfile", back_populates="user", cascade="all, delete-orphan"
+    )
+    sessions: Mapped[List["Session"]] = relationship(
+        "Session", back_populates="user", cascade="all, delete-orphan"
+    )
+    applications: Mapped[List["Application"]] = relationship(
+        "Application", back_populates="user", cascade="all, delete-orphan"
+    )
+    cover_letters: Mapped[List["CoverLetter"]] = relationship(
+        "CoverLetter", back_populates="user", cascade="all, delete-orphan"
+    )
+    job_matches: Mapped[List["JobMatch"]] = relationship(
+        "JobMatch", back_populates="user", cascade="all, delete-orphan"
+    )
+    interview_sessions: Mapped[List["InterviewSession"]] = relationship(
+        "InterviewSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    email_logs: Mapped[List["EmailLog"]] = relationship(
+        "EmailLog", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email='{self.email}')>"
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = Column(String, primary_key=True)  # UUID token
+    user_id: Mapped[int] = Column(Integer, ForeignKey("users.id"), nullable=False)
+    expires_at: Mapped[datetime] = Column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="sessions")
+
+    def __repr__(self) -> str:
+        return f"<Session(id='{self.id}', user_id={self.user_id})>"
+
+
+# ---------------------------------------------------------------------------
 # CandidateProfile
 # ---------------------------------------------------------------------------
 
@@ -40,10 +95,12 @@ class CandidateProfile(Base):
     experience_years: Mapped[Optional[int]] = Column(Integer, nullable=True)
     summary: Mapped[Optional[str]] = Column(Text, nullable=True)
     cv_file_path: Mapped[Optional[str]] = Column(String, nullable=True)
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = Column(DateTime, onupdate=func.now(), nullable=True)
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="profiles")
     job_matches: Mapped[List["JobMatch"]] = relationship(
         "JobMatch", back_populates="candidate", cascade="all, delete-orphan"
     )
@@ -114,9 +171,11 @@ class JobMatch(Base):
     matching_skills = Column(JSON, nullable=True)  # list[str]
     missing_skills = Column(JSON, nullable=True)  # list[str]
     recommendations = Column(JSON, nullable=True)  # list[str]
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="job_matches")
     candidate: Mapped["CandidateProfile"] = relationship(
         "CandidateProfile", back_populates="job_matches"
     )
@@ -141,9 +200,11 @@ class CoverLetter(Base):
     content: Mapped[Optional[str]] = Column(Text, nullable=True)
     email_template: Mapped[Optional[str]] = Column(Text, nullable=True)
     pdf_path: Mapped[Optional[str]] = Column(String, nullable=True)
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="cover_letters")
     candidate: Mapped["CandidateProfile"] = relationship(
         "CandidateProfile", back_populates="cover_letters"
     )
@@ -178,10 +239,12 @@ class Application(Base):
     status: Mapped[str] = Column(String, default="Applied")
     follow_up_date: Mapped[Optional[datetime]] = Column(DateTime, nullable=True)
     notes: Mapped[Optional[str]] = Column(Text, nullable=True)
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = Column(DateTime, onupdate=func.now(), nullable=True)
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="applications")
     candidate: Mapped["CandidateProfile"] = relationship(
         "CandidateProfile", back_populates="applications"
     )
@@ -221,9 +284,11 @@ class InterviewSession(Base):
     overall_score: Mapped[Optional[float]] = Column(Float, nullable=True)
     feedback: Mapped[Optional[str]] = Column(Text, nullable=True)
     recommendations = Column(JSON, nullable=True)  # list[str]
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="interview_sessions")
     candidate: Mapped["CandidateProfile"] = relationship(
         "CandidateProfile", back_populates="interview_sessions"
     )
@@ -250,6 +315,7 @@ class EmailLog(Base):
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     application_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = Column(Integer, ForeignKey("users.id"), nullable=True)
     email_type: Mapped[str] = Column(String, nullable=False, default="application")  # application / follow_up
     recipient: Mapped[str] = Column(String, nullable=False)
     subject: Mapped[Optional[str]] = Column(String, nullable=True)
@@ -260,6 +326,9 @@ class EmailLog(Base):
     created_at: Mapped[datetime] = Column(DateTime, server_default=func.now())
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(
+        "User", back_populates="email_logs"
+    )
     application: Mapped[Optional["Application"]] = relationship(
         "Application", back_populates="email_logs"
     )

@@ -45,12 +45,27 @@ export default function JobSearch({ onNavigate }) {
           prefillQuery = profile.skills[0];
         }
         
+        const defaultLoc = '';
+        
         if (prefillQuery) {
           setQuery(prefillQuery);
+          setLocation(defaultLoc);
+          
+          // Auto-trigger search
+          setSearching(true);
+          setError('');
+          try {
+            const data = await searchJobs(prefillQuery, defaultLoc, filters);
+            const jobsList = Array.isArray(data) ? data : (data.jobs || []);
+            setJobs(jobsList);
+          } catch (err) {
+            setError(err.message || 'Auto-search failed');
+          } finally {
+            setSearching(false);
+          }
+        } else {
+          setLocation(defaultLoc);
         }
-        
-        // Pre-fill location to Malaysia
-        setLocation('Malaysia');
       }
     } catch (e) {
       console.error('Failed to load profile for prefill:', e);

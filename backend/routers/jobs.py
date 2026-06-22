@@ -9,9 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
-from database.models import CandidateProfile, JobListing, JobMatch
+from database.models import CandidateProfile, JobListing, JobMatch, User
 from agents.job_discovery import JobDiscoveryAgent
 from agents.job_matching import JobMatchingAgent
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/jobs", tags=["Job Search & Matching"])
 
@@ -74,7 +75,11 @@ class MatchResponse(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/search", response_model=List[JobResponse])
-async def search_jobs(request: SearchRequest, db: AsyncSession = Depends(get_db)):
+async def search_jobs(
+    request: SearchRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Search for jobs using the AI Job Discovery Agent and save results."""
 
     filters_dict: dict[str, Any] | None = None
@@ -136,6 +141,7 @@ async def search_jobs(request: SearchRequest, db: AsyncSession = Depends(get_db)
 async def list_jobs(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List all saved job listings."""
     stmt = (
@@ -149,7 +155,11 @@ async def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobResponse)
-async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
+async def get_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get a single job listing by ID."""
     stmt = select(JobListing).where(JobListing.id == job_id)
     result = await db.execute(stmt)
@@ -169,6 +179,7 @@ async def match_job(
     body: Optional[MatchRequest] = None,
     profile_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Match a job listing against a candidate profile."""
 
@@ -191,12 +202,19 @@ async def match_job(
 
     # Fetch candidate
     if cid:
-        stmt = select(CandidateProfile).where(CandidateProfile.id == cid)
+        stmt = select(CandidateProfile).where(
+            (CandidateProfile.id == cid) & (CandidateProfile.user_id == current_user.id)
+        )
         result = await db.execute(stmt)
         candidate = result.scalar_one_or_none()
     else:
-        # Fallback to latest profile
-        stmt = select(CandidateProfile).order_by(CandidateProfile.created_at.desc()).limit(1)
+        # Fallback to latest profile of this user
+        stmt = (
+            select(CandidateProfile)
+            .where(CandidateProfile.user_id == current_user.id)
+            .order_by(CandidateProfile.created_at.desc())
+            .limit(1)
+        )
         result = await db.execute(stmt)
         candidate = result.scalar_one_or_none()
 
@@ -253,6 +271,7 @@ async def match_job(
         matching_skills=match_result.get("matching_skills", []),
         missing_skills=match_result.get("missing_skills", []),
         recommendations=match_result.get("recommendations", []),
+        user_id=current_user.id,
     )
     db.add(job_match)
     await db.flush()

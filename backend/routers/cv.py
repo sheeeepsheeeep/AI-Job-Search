@@ -11,9 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
-from database.models import CandidateProfile
+from database.models import CandidateProfile, User
 from services.cv_parser import extract_cv_text
 from agents.cv_analysis import CVAnalysisAgent
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/cv", tags=["CV & Profile"])
 
@@ -47,6 +48,7 @@ class ProfileResponse(BaseModel):
 async def upload_cv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Upload a CV file (PDF/DOCX), parse, analyse with AI, and save profile."""
 
@@ -107,6 +109,7 @@ async def upload_cv(
         experience_years=analysis.get("experience_years"),
         summary=analysis.get("summary"),
         cv_file_path=file_path,
+        user_id=current_user.id,
     )
     db.add(profile)
     await db.flush()
@@ -116,10 +119,14 @@ async def upload_cv(
 
 
 @router.get("/profile", response_model=ProfileResponse)
-async def get_latest_profile(db: AsyncSession = Depends(get_db)):
+async def get_latest_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get the most recently created candidate profile."""
     stmt = (
         select(CandidateProfile)
+        .where(CandidateProfile.user_id == current_user.id)
         .order_by(CandidateProfile.created_at.desc())
         .limit(1)
     )
@@ -135,31 +142,43 @@ async def get_latest_profile(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/profile/{profile_id}", response_model=ProfileResponse)
-async def get_profile(profile_id: int, db: AsyncSession = Depends(get_db)):
+async def get_profile(
+    profile_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get a specific candidate profile by ID."""
-    stmt = select(CandidateProfile).where(CandidateProfile.id == profile_id)
+    stmt = select(CandidateProfile).where(
+        (CandidateProfile.id == profile_id) & (CandidateProfile.user_id == current_user.id)
+    )
     result = await db.execute(stmt)
     profile = result.scalar_one_or_none()
 
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile with ID {profile_id} not found.",
+            detail=f"Profile with ID {profile_id} not found or unauthorized.",
         )
     return profile
 
 
 @router.get("/recommendations/{profile_id}")
-async def get_recommendations(profile_id: int, db: AsyncSession = Depends(get_db)):
+async def get_recommendations(
+    profile_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get AI-generated career recommendations for a candidate profile."""
-    stmt = select(CandidateProfile).where(CandidateProfile.id == profile_id)
+    stmt = select(CandidateProfile).where(
+        (CandidateProfile.id == profile_id) & (CandidateProfile.user_id == current_user.id)
+    )
     result = await db.execute(stmt)
     profile = result.scalar_one_or_none()
 
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile with ID {profile_id} not found.",
+            detail=f"Profile with ID {profile_id} not found or unauthorized.",
         )
 
     profile_dict = {

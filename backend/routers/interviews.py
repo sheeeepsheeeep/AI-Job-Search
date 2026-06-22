@@ -14,7 +14,9 @@ from database.models import (
     InterviewAnswer,
     InterviewSession,
     JobListing,
+    User,
 )
+from routers.auth import get_current_user
 from agents.interview_prep import InterviewPrepAgent
 
 router = APIRouter(prefix="/interviews", tags=["Interview Preparation"])
@@ -108,6 +110,7 @@ class OverallFeedbackResponse(BaseModel):
 async def start_interview_session(
     payload: StartSessionRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Start a new interview session.
 
@@ -116,9 +119,9 @@ async def start_interview_session(
     """
     cid = payload.candidate_id or payload.profile_id
     if not cid:
-        # Fetch the latest profile
+        # Fetch the latest profile of this user
         result = await db.execute(
-            select(CandidateProfile).order_by(CandidateProfile.created_at.desc()).limit(1)
+            select(CandidateProfile).where(CandidateProfile.user_id == current_user.id).order_by(CandidateProfile.created_at.desc()).limit(1)
         )
         candidate = result.scalars().first()
         if not candidate:
@@ -129,13 +132,13 @@ async def start_interview_session(
         cid = candidate.id
     else:
         result = await db.execute(
-            select(CandidateProfile).where(CandidateProfile.id == cid)
+            select(CandidateProfile).where((CandidateProfile.id == cid) & (CandidateProfile.user_id == current_user.id))
         )
         candidate = result.scalars().first()
         if not candidate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Candidate {cid} not found.",
+                detail=f"Candidate {cid} not found or unauthorized.",
             )
 
     # Build candidate profile dict for the agent
@@ -188,6 +191,7 @@ async def start_interview_session(
         interview_type=payload.interview_type,
         questions=questions,
         scores=[],
+        user_id=current_user.id,
     )
     db.add(session_obj)
     await db.flush()
@@ -204,17 +208,20 @@ async def submit_answer(
     session_id: int,
     payload: SubmitAnswerRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Submit an answer to a question and receive an AI evaluation."""
-    # Fetch session
+    # Fetch session (user scoped)
     result = await db.execute(
-        select(InterviewSession).where(InterviewSession.id == session_id)
+        select(InterviewSession).where(
+            (InterviewSession.id == session_id) & (InterviewSession.user_id == current_user.id)
+        )
     )
     session_obj = result.scalars().first()
     if not session_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview session {session_id} not found.",
+            detail=f"Interview session {session_id} not found or unauthorized.",
         )
 
     # Validate question_index
@@ -290,17 +297,20 @@ async def submit_answer(
 async def get_overall_feedback(
     session_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Generate overall feedback for a completed interview session."""
-    # Fetch session
+    # Fetch session (user scoped)
     result = await db.execute(
-        select(InterviewSession).where(InterviewSession.id == session_id)
+        select(InterviewSession).where(
+            (InterviewSession.id == session_id) & (InterviewSession.user_id == current_user.id)
+        )
     )
     session_obj = result.scalars().first()
     if not session_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview session {session_id} not found.",
+            detail=f"Interview session {session_id} not found or unauthorized.",
         )
 
     # Fetch all answers for this session
@@ -348,11 +358,10 @@ async def get_overall_feedback(
 async def list_interview_sessions(
     candidate_id: Optional[int] = Query(None, description="Filter by candidate ID"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List interview sessions, optionally filtered by candidate_id."""
-    stmt = select(InterviewSession).order_by(InterviewSession.created_at.desc())
-    if candidate_id is not None:
-        stmt = stmt.where(InterviewSession.candidate_id == candidate_id)
+    """List interview sessions, filtered by current user."""
+    stmt = select(InterviewSession).where(InterviewSession.user_id == current_user.id).order_by(InterviewSession.created_at.desc())
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
@@ -363,19 +372,20 @@ async def list_interview_sessions(
 async def get_interview_session(
     session_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get a specific interview session with all its answers."""
-    # Eager-load the answers relationship
+    # Eager-load the answers relationship (user scoped)
     result = await db.execute(
         select(InterviewSession)
-        .where(InterviewSession.id == session_id)
+        .where((InterviewSession.id == session_id) & (InterviewSession.user_id == current_user.id))
         .options(selectinload(InterviewSession.answer_records))
     )
     session_obj = result.scalars().first()
     if not session_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview session {session_id} not found.",
+            detail=f"Interview session {session_id} not found or unauthorized.",
         )
 
     # Build response — the 'answers' relationship holds InterviewAnswer objects

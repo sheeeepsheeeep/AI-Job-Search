@@ -83,6 +83,7 @@ app.add_middleware(
 # individual router modules haven't been created yet)
 # ---------------------------------------------------------------------------
 _router_modules = [
+    ("routers.auth", "auth", "/api"),
     ("routers.cv", "cv", "/api"),
     ("routers.jobs", "jobs", "/api"),
     ("routers.applications", "applications", "/api"),

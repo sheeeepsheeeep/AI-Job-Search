@@ -11,9 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
-from database.models import CandidateProfile, CoverLetter, JobListing
+from database.models import CandidateProfile, CoverLetter, JobListing, User
 from agents.cover_letter import CoverLetterAgent
 from services.pdf_generator import generate_cover_letter_pdf
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/cover-letters", tags=["Cover Letters"])
 
@@ -64,13 +65,17 @@ class GenerateResponse(BaseModel):
 
 
 @router.post("/generate", response_model=GenerateResponse, status_code=status.HTTP_201_CREATED)
-async def generate_cover_letter(body: GenerateRequest, db: AsyncSession = Depends(get_db)):
+async def generate_cover_letter(
+    body: GenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Generate a cover letter for a candidate/job pair using AI."""
 
     cid = body.candidate_id or body.profile_id
     if not cid:
-        # Fallback to latest profile
-        stmt = select(CandidateProfile).order_by(CandidateProfile.created_at.desc()).limit(1)
+        # Fallback to latest profile of this user
+        stmt = select(CandidateProfile).where(CandidateProfile.user_id == current_user.id).order_by(CandidateProfile.created_at.desc()).limit(1)
         result = await db.execute(stmt)
         candidate = result.scalars().first()
         if not candidate:
@@ -80,15 +85,15 @@ async def generate_cover_letter(body: GenerateRequest, db: AsyncSession = Depend
             )
         cid = candidate.id
     else:
-        # Fetch candidate profile
+        # Fetch candidate profile (user scoped)
         result = await db.execute(
-            select(CandidateProfile).where(CandidateProfile.id == cid)
+            select(CandidateProfile).where((CandidateProfile.id == cid) & (CandidateProfile.user_id == current_user.id))
         )
         candidate = result.scalars().first()
         if not candidate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Candidate profile with ID {cid} not found.",
+                detail=f"Candidate profile with ID {cid} not found or unauthorized.",
             )
 
     # Fetch job listing
@@ -149,10 +154,11 @@ async def generate_cover_letter(body: GenerateRequest, db: AsyncSession = Depend
 
     # Save to database
     cover_letter = CoverLetter(
-        candidate_id=body.candidate_id,
+        candidate_id=cid,
         job_id=body.job_id,
         content=ai_result.get("cover_letter", ""),
         email_template=ai_result.get("email_body", ""),
+        user_id=current_user.id,
     )
     db.add(cover_letter)
     await db.flush()
@@ -177,9 +183,10 @@ async def generate_cover_letter(body: GenerateRequest, db: AsyncSession = Depend
 async def list_cover_letters(
     candidate_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List all cover letters, optionally filtered by candidate_id."""
-    stmt = select(CoverLetter)
+    """List all cover letters for the logged-in user."""
+    stmt = select(CoverLetter).where(CoverLetter.user_id == current_user.id)
     if candidate_id is not None:
         stmt = stmt.where(CoverLetter.candidate_id == candidate_id)
     stmt = stmt.order_by(CoverLetter.created_at.desc())
@@ -190,16 +197,22 @@ async def list_cover_letters(
 
 
 @router.get("/{cover_letter_id}", response_model=CoverLetterResponse)
-async def get_cover_letter(cover_letter_id: int, db: AsyncSession = Depends(get_db)):
+async def get_cover_letter(
+    cover_letter_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get a specific cover letter by ID."""
     result = await db.execute(
-        select(CoverLetter).where(CoverLetter.id == cover_letter_id)
+        select(CoverLetter).where(
+            (CoverLetter.id == cover_letter_id) & (CoverLetter.user_id == current_user.id)
+        )
     )
     cover_letter = result.scalars().first()
     if not cover_letter:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cover letter with ID {cover_letter_id} not found.",
+            detail=f"Cover letter with ID {cover_letter_id} not found or unauthorized.",
         )
     return cover_letter
 
@@ -208,18 +221,21 @@ async def get_cover_letter(cover_letter_id: int, db: AsyncSession = Depends(get_
 async def download_cover_letter_pdf(
     cover_letter_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Generate a PDF for the cover letter and return it as a file download."""
 
-    # Fetch cover letter
+    # Fetch cover letter (user scoped)
     result = await db.execute(
-        select(CoverLetter).where(CoverLetter.id == cover_letter_id)
+        select(CoverLetter).where(
+            (CoverLetter.id == cover_letter_id) & (CoverLetter.user_id == current_user.id)
+        )
     )
     cover_letter = result.scalars().first()
     if not cover_letter:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cover letter with ID {cover_letter_id} not found.",
+            detail=f"Cover letter with ID {cover_letter_id} not found or unauthorized.",
         )
 
     if not cover_letter.content:
@@ -230,7 +246,9 @@ async def download_cover_letter_pdf(
 
     # Fetch candidate name
     result = await db.execute(
-        select(CandidateProfile).where(CandidateProfile.id == cover_letter.candidate_id)
+        select(CandidateProfile).where(
+            (CandidateProfile.id == cover_letter.candidate_id) & (CandidateProfile.user_id == current_user.id)
+        )
     )
     candidate = result.scalars().first()
     candidate_name = candidate.name if candidate else "Candidate"

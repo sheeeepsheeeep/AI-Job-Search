@@ -22,6 +22,72 @@ logger = logging.getLogger(__name__)
 
 SIMULATED_JOBS: list[dict[str, Any]] = [
     {
+        "title": "Software Engineer",
+        "company": "Grab",
+        "location": "Kuala Lumpur, Malaysia",
+        "salary_range": "RM 8,000 - RM 12,000",
+        "description": (
+            "Develop and maintain backend services for Grab's transport and delivery services. "
+            "Design highly scalable APIs using Go and Python. "
+            "Collaborate with mobile and frontend teams to deliver a smooth user experience."
+        ),
+        "requirements": [
+            "3+ years of backend development experience",
+            "Proficiency in Go, Python, or Java",
+            "Experience with microservices and RESTful APIs",
+            "BS in Computer Science or equivalent",
+        ],
+        "url": "https://careers.grab.com/jobs/swe-kl",
+        "source": "Grab Careers",
+        "remote_status": "hybrid",
+        "industry": "Technology / Ride-Hailing",
+        "experience_level": "Mid-Level",
+    },
+    {
+        "title": "Frontend Engineer (React)",
+        "company": "Shopee",
+        "location": "Kuala Lumpur, Malaysia",
+        "salary_range": "RM 7,500 - RM 11,000",
+        "description": (
+            "Build responsive e-commerce web applications using React and TypeScript. "
+            "Optimize web performance and component reusability. "
+            "Translate UI/UX designs into high-quality code."
+        ),
+        "requirements": [
+            "2+ years of React development experience",
+            "Strong command of JavaScript/TypeScript, HTML, and CSS",
+            "Experience with modern state management (Redux, Context API)",
+            "Excellent problem-solving and communication skills",
+        ],
+        "url": "https://careers.shopee.com.my/jobs/fe-react",
+        "source": "Shopee Careers",
+        "remote_status": "hybrid",
+        "industry": "E-Commerce",
+        "experience_level": "Mid-Level",
+    },
+    {
+        "title": "Python Developer",
+        "company": "Carsome",
+        "location": "Kuala Lumpur, Malaysia",
+        "salary_range": "RM 6,000 - RM 9,000",
+        "description": (
+            "Build robust internal tools and data processing pipelines. "
+            "Maintain Django/FastAPI backend services. "
+            "Write clean, readable, and well-tested code."
+        ),
+        "requirements": [
+            "1-3 years of Python development experience",
+            "Experience with Django, Flask, or FastAPI",
+            "Good knowledge of SQL and relational databases",
+            "Familiarity with Git and Docker",
+        ],
+        "url": "https://careers.carsome.com/jobs/python-dev",
+        "source": "Carsome Careers",
+        "remote_status": "hybrid",
+        "industry": "Automotive / Technology",
+        "experience_level": "Junior-Mid",
+    },
+    {
         "title": "Senior Software Engineer",
         "company": "Google",
         "location": "Mountain View, CA",
@@ -513,11 +579,64 @@ def scrape_jobs(
                 if _matches_query(job_data, query) and loc_matches:
                     results.append(job_data)
 
-            logger.info("Successfully fetched and filtered %d live jobs from WeWorkRemotely.", len(results))
+            logger.info("Successfully fetched and filtered live jobs from WeWorkRemotely. Total: %d", len(results))
     except Exception as exc:
-        logger.error("Failed to fetch live jobs from WeWorkRemotely: %s. Falling back to simulated jobs.", exc)
+        logger.error("Failed to fetch live jobs from WeWorkRemotely: %s.", exc)
 
-    # 2. Fallback to simulated jobs if no live jobs matched
+    # 2. Attempt to fetch live jobs from The Muse public API
+    try:
+        logger.info("Attempting to fetch live jobs from The Muse public API...")
+        for page in range(1, 3):
+            muse_url = f"https://www.themuse.com/api/public/jobs?page={page}"
+            response = requests.get(muse_url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                for item in data.get("results", []):
+                    title = item.get("name", "Unknown Title")
+                    company = item.get("company", {}).get("name", "Unknown Company")
+                    
+                    locs = [l.get("name") for l in item.get("locations", []) if l.get("name")]
+                    loc_str = ", ".join(locs) if locs else "Remote"
+                    
+                    desc_html = item.get("contents", "")
+                    desc = BeautifulSoup(desc_html, "html.parser").get_text(separator=" ")
+                    
+                    job_url = item.get("refs", {}).get("landing_page", "")
+                    
+                    levels = [lvl.get("name") for lvl in item.get("levels", []) if lvl.get("name")]
+                    level = levels[0] if levels else "Mid-Senior"
+                    
+                    remote_status = "remote" if "remote" in loc_str.lower() else "hybrid" if "hybrid" in loc_str.lower() else "onsite"
+                    
+                    job_data = {
+                        "title": title,
+                        "company": company,
+                        "location": loc_str,
+                        "salary_range": "Not specified",
+                        "description": desc[:2000],
+                        "requirements": [
+                            "Strong communication skills",
+                            "Relevant experience in the field",
+                        ],
+                        "url": job_url,
+                        "source": "The Muse",
+                        "remote_status": remote_status,
+                        "industry": "Technology",
+                        "experience_level": level,
+                        "date_found": datetime.utcnow().isoformat(),
+                    }
+
+                    if (
+                        _matches_query(job_data, query)
+                        and _matches_location(job_data, location)
+                        and _matches_filters(job_data, filters)
+                    ):
+                        results.append(job_data)
+        logger.info("Successfully fetched and filtered live jobs from The Muse. Current result count: %d", len(results))
+    except Exception as exc:
+        logger.error("Failed to fetch live jobs from The Muse: %s", exc)
+
+    # 3. Fallback to simulated jobs if no live jobs matched from any source
     if not results:
         logger.info("No live jobs matched or fetch failed. Falling back to simulated jobs...")
         for job in SIMULATED_JOBS:

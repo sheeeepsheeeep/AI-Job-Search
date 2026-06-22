@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
-from database.models import Application, CandidateProfile
+from database.models import Application, CandidateProfile, User
 from agents.application_tracking import ApplicationTrackingAgent
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/applications", tags=["Application Tracking"])
 
@@ -88,6 +89,7 @@ def _application_to_dict(app: Application) -> dict:
 async def create_application(
     body: CreateApplicationRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new job application record."""
     application = Application(
@@ -99,6 +101,7 @@ async def create_application(
         cover_letter_id=body.cover_letter_id,
         notes=body.notes,
         status="Applied",
+        user_id=current_user.id,
     )
     db.add(application)
     await db.flush()
@@ -107,13 +110,18 @@ async def create_application(
 
 
 @router.get("/stats")
-async def get_application_stats(db: AsyncSession = Depends(get_db)):
+async def get_application_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get application statistics using the AI tracking agent."""
     from sqlalchemy import func
     from database.models import JobListing
 
     result = await db.execute(
-        select(Application).order_by(Application.created_at.desc())
+        select(Application)
+        .where(Application.user_id == current_user.id)
+        .order_by(Application.created_at.desc())
     )
     applications = result.scalars().all()
 
@@ -133,9 +141,9 @@ async def get_application_stats(db: AsyncSession = Depends(get_db)):
     jobs_count_result = await db.execute(jobs_count_stmt)
     total_jobs = jobs_count_result.scalar() or 0
 
-    # Calculate average job match score from JobMatch table
+    # Calculate average job match score from JobMatch table (user scoped)
     from database.models import JobMatch
-    match_score_stmt = select(func.avg(JobMatch.match_score))
+    match_score_stmt = select(func.avg(JobMatch.match_score)).where(JobMatch.user_id == current_user.id)
     match_score_result = await db.execute(match_score_stmt)
     avg_match_score = match_score_result.scalar()
 
@@ -151,24 +159,27 @@ async def get_application_stats(db: AsyncSession = Depends(get_db)):
 async def generate_insights(
     body: InsightsRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Generate AI-powered strategic insights for a candidate's applications."""
 
-    # Fetch candidate profile
+    # Fetch candidate profile (user scoped)
     result = await db.execute(
-        select(CandidateProfile).where(CandidateProfile.id == body.candidate_id)
+        select(CandidateProfile).where(
+            (CandidateProfile.id == body.candidate_id) & (CandidateProfile.user_id == current_user.id)
+        )
     )
     candidate = result.scalars().first()
     if not candidate:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Candidate profile with ID {body.candidate_id} not found.",
+            detail=f"Candidate profile with ID {body.candidate_id} not found or unauthorized.",
         )
 
-    # Fetch candidate's applications
+    # Fetch candidate's applications (user scoped)
     result = await db.execute(
         select(Application)
-        .where(Application.candidate_id == body.candidate_id)
+        .where((Application.candidate_id == body.candidate_id) & (Application.user_id == current_user.id))
         .order_by(Application.created_at.desc())
     )
     applications = result.scalars().all()
@@ -205,9 +216,10 @@ async def list_applications(
     status_filter: Optional[str] = None,
     candidate_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List all applications, optionally filtered by status and/or candidate_id."""
-    stmt = select(Application)
+    stmt = select(Application).where(Application.user_id == current_user.id)
     if status_filter is not None:
         stmt = stmt.where(Application.status == status_filter)
     if candidate_id is not None:
@@ -220,16 +232,22 @@ async def list_applications(
 
 
 @router.get("/{application_id}", response_model=ApplicationResponse)
-async def get_application(application_id: int, db: AsyncSession = Depends(get_db)):
+async def get_application(
+    application_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get a specific application by ID."""
     result = await db.execute(
-        select(Application).where(Application.id == application_id)
+        select(Application).where(
+            (Application.id == application_id) & (Application.user_id == current_user.id)
+        )
     )
     application = result.scalars().first()
     if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application with ID {application_id} not found.",
+            detail=f"Application with ID {application_id} not found or unauthorized.",
         )
     return application
 
@@ -239,16 +257,19 @@ async def update_application_status(
     application_id: int,
     body: UpdateStatusRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update the status (and optionally notes) of an application."""
     result = await db.execute(
-        select(Application).where(Application.id == application_id)
+        select(Application).where(
+            (Application.id == application_id) & (Application.user_id == current_user.id)
+        )
     )
     application = result.scalars().first()
     if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application with ID {application_id} not found.",
+            detail=f"Application with ID {application_id} not found or unauthorized.",
         )
 
     application.status = body.status

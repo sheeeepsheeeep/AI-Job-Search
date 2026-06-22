@@ -15,9 +15,14 @@ class ApiError extends Error {
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
+  
+  const token = localStorage.getItem('token');
+  const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options.headers,
     },
     ...options,
@@ -241,4 +246,38 @@ export async function getInterviewResults(sessionId) {
 
 export async function getInterviewHistory() {
   return request('/interviews/history');
+}
+
+// ── Authentication ────────────────────────────────────────────────────────────
+
+export async function login(email, password) {
+  const result = await request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  if (result && result.access_token) {
+    localStorage.setItem('token', result.access_token);
+  }
+  return result;
+}
+
+export async function register(email, password) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logout() {
+  try {
+    await request('/auth/logout', { method: 'POST' });
+  } catch (e) {
+    console.error('Logout request failed:', e);
+  } finally {
+    localStorage.removeItem('token');
+  }
+}
+
+export async function getCurrentUser() {
+  return request('/auth/me');
 }

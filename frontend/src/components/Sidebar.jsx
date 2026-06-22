@@ -1,7 +1,7 @@
 import React from 'react';
 import './Sidebar.css';
 
-export default function Sidebar({ pages, currentPage, onNavigate, collapsed, onToggle }) {
+export default function Sidebar({ pages, currentPage, onNavigate, collapsed, onToggle, currentUser, onLogout }) {
   const navItems = Object.entries(pages);
 
   return (
@@ -43,19 +43,31 @@ export default function Sidebar({ pages, currentPage, onNavigate, collapsed, onT
       <div className="sidebar-footer">
         <div className="divider" />
         <div className="sidebar-user">
-          <div className="user-avatar">
+          <div className="user-avatar" title={currentUser?.email || 'Candidate'}>
             <span>👤</span>
           </div>
           {!collapsed && (
             <div className="user-info">
-              <span className="user-name">Candidate</span>
+              <span className="user-name" title={currentUser?.email}>
+                {currentUser?.email ? currentUser.email.split('@')[0] : 'Candidate'}
+              </span>
               <span className="user-status">
                 <span className="status-dot" />
                 Active
               </span>
             </div>
           )}
+          {!collapsed && (
+            <button className="btn-logout" onClick={onLogout} title="Log Out">
+              🚪
+            </button>
+          )}
         </div>
+        {collapsed && (
+          <button className="btn-logout-collapsed" onClick={onLogout} title="Log Out">
+            <span>🚪</span>
+          </button>
+        )}
       </div>
     </aside>
   );

@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
-from database.models import Application, EmailLog
+from database.models import Application, EmailLog, User
 from agents.email_automation import EmailAutomationAgent
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/emails", tags=["Email Management"])
 
@@ -46,6 +47,7 @@ class EmailLogResponse(BaseModel):
 async def send_application_email(
     payload: SendEmailRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Send an application email.
 
@@ -54,15 +56,17 @@ async def send_application_email(
     """
     application = None
     if payload.application_id is not None:
-        # Fetch the application
+        # Fetch the application (user scoped)
         result = await db.execute(
-            select(Application).where(Application.id == payload.application_id)
+            select(Application).where(
+                (Application.id == payload.application_id) & (Application.user_id == current_user.id)
+            )
         )
         application = result.scalars().first()
         if not application:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Application {payload.application_id} not found.",
+                detail=f"Application {payload.application_id} not found or unauthorized.",
             )
 
     # Auto-generate subject / body when not supplied
@@ -87,6 +91,7 @@ async def send_application_email(
     # Create a pending email log
     email_log = EmailLog(
         application_id=application.id if application else None,
+        user_id=current_user.id,
         email_type="application",
         recipient=payload.recipient_email,
         subject=subject,
@@ -125,9 +130,10 @@ async def send_application_email(
 async def list_email_history(
     application_id: Optional[int] = Query(None, description="Filter by application ID"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List email logs, optionally filtered by application_id."""
-    stmt = select(EmailLog).order_by(EmailLog.created_at.desc())
+    """List email logs, filtered by user_id."""
+    stmt = select(EmailLog).where(EmailLog.user_id == current_user.id).order_by(EmailLog.created_at.desc())
     if application_id is not None:
         stmt = stmt.where(EmailLog.application_id == application_id)
 
@@ -140,17 +146,20 @@ async def list_email_history(
 async def send_follow_up_email(
     application_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Send a follow-up email for an application."""
-    # Fetch application
+    # Fetch application (user scoped)
     result = await db.execute(
-        select(Application).where(Application.id == application_id)
+        select(Application).where(
+            (Application.id == application_id) & (Application.user_id == current_user.id)
+        )
     )
     application = result.scalars().first()
     if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Application {application_id} not found.",
+            detail=f"Application {application_id} not found or unauthorized.",
         )
 
     subject = f"Follow-up: {application.job_title} at {application.company_name}"
@@ -174,6 +183,7 @@ async def send_follow_up_email(
     # Create a pending email log
     email_log = EmailLog(
         application_id=application.id,
+        user_id=current_user.id,
         email_type="follow_up",
         recipient=recipient,
         subject=subject,
