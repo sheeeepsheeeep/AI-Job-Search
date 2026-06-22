@@ -1,0 +1,356 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Cover Letter Generator — Component Styles
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.cover-letter-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  animation: fadeInUp 0.5s ease both;
+}
+
+.cover-letter-page .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.cover-letter-page .page-header h1 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-3xl);
+}
+
+.cover-letter-page .page-header p {
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+/* ── Config Panel ────────────────────────────────────────────────────────────── */
+.cl-config-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.cl-config-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  animation: fadeInUp 0.4s ease both;
+}
+
+.cl-config-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.cl-config-card h3 {
+  font-size: var(--font-lg);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cl-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cl-form-group label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.cl-tone-options {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cl-tone-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: var(--font-family);
+}
+
+.cl-tone-btn:hover {
+  border-color: var(--accent-violet);
+  color: var(--text-primary);
+}
+
+.cl-tone-btn.active {
+  background: var(--gradient-primary);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.3);
+}
+
+.cl-generate-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.cl-generate-btn {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: var(--font-family);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-shadow: var(--shadow-md), 0 0 20px rgba(99, 102, 241, 0.2);
+  background-size: 200% 200%;
+}
+
+.cl-generate-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 30px rgba(99, 102, 241, 0.3);
+  animation: gradientShift 3s ease infinite;
+}
+
+.cl-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cl-generate-btn .spinner {
+  border-top-color: white;
+}
+
+/* ── Preview Section ──────────────────────────────────────────────────────── */
+.cl-preview-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.cl-preview-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease both;
+}
+
+.cl-preview-card:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.cl-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.cl-preview-header h3 {
+  font-size: var(--font-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cl-preview-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.cl-action-btn {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-family);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cl-action-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--accent-indigo);
+}
+
+.cl-action-btn.download-btn {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-emerald);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.cl-action-btn.download-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-emerald);
+}
+
+.cl-preview-body {
+  padding: var(--space-6);
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.cl-letter-content {
+  white-space: pre-wrap;
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+}
+
+.cl-email-subject {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.cl-email-subject span {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cl-email-subject p {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  margin-top: var(--space-1);
+}
+
+.cl-email-body {
+  white-space: pre-wrap;
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+}
+
+/* ── Empty State ──────────────────────────────────────────────────────────── */
+.cl-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  text-align: center;
+}
+
+.cl-empty-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  animation: float 3s ease-in-out infinite;
+}
+
+.cl-empty-state h3 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.cl-empty-state p {
+  color: var(--text-tertiary);
+  max-width: 350px;
+}
+
+/* ── Copy Toast ───────────────────────────────────────────────────────────── */
+.cl-toast {
+  position: fixed;
+  bottom: var(--space-8);
+  right: var(--space-8);
+  padding: var(--space-3) var(--space-6);
+  background: var(--accent-emerald);
+  color: white;
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: fadeInUp 0.3s ease both;
+  z-index: var(--z-toast);
+}
+
+/* ── History Section ──────────────────────────────────────────────────────── */
+.cl-history {
+  animation: fadeInUp 0.5s ease both;
+  animation-delay: 0.2s;
+}
+
+.cl-history h3 {
+  font-size: var(--font-lg);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cl-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cl-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.cl-history-item:hover {
+  border-color: var(--glass-border-light);
+  background: var(--bg-elevated);
+}
+
+.cl-history-item-info h4 {
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
+}
+
+.cl-history-item-info p {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .cl-config-panel,
+  .cl-preview-section {
+    grid-template-columns: 1fr;
+  }
+}
