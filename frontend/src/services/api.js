@@ -2,7 +2,7 @@
    API Service — All endpoint functions for the AI Job Search Agent
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 class ApiError extends Error {
   constructor(message, status, data) {
